@@ -1,0 +1,303 @@
+import os
+import tempfile
+from uuid import uuid4
+
+from flask import Flask, Response, jsonify, render_template, request, send_file
+
+from app.conversion import convert_file
+from app.utils import FILESIZE_LIMIT, is_allowed_extension, is_valid_conversion, make_temp_file_path, normalize_ext, safe_name
+
+PAGES = {
+    "home": {"title": "FileSafe | Convert files securely to PDF and more", "meta_description": "Convert files securely without login. DOCX to PDF, JPG to PDF, PDF to Word, Excel, PowerPoint, and more."},
+    "docx_to_pdf": {"title": "DOCX to PDF | FileSafe", "meta_description": "Convert DOCX files to PDF in seconds without login. Secure, privacy-first, and free."},
+    "pptx_to_pdf": {"title": "PPTX to PDF | FileSafe", "meta_description": "Convert PowerPoint presentations to PDF securely and quickly with FileSafe."},
+    "xlsx_to_pdf": {"title": "XLSX to PDF | FileSafe", "meta_description": "Convert Excel spreadsheets to PDF safely and cleanly with FileSafe."},
+    "pdf_to_word": {"title": "PDF to Word | FileSafe", "meta_description": "Convert PDF files to DOC or DOCX with privacy-first processing and no account required."},
+    "pdf_to_powerpoint": {"title": "PDF to PowerPoint | FileSafe", "meta_description": "Convert PDF to PowerPoint files in a secure, private workflow."},
+    "pdf_to_excel": {"title": "PDF to Excel | FileSafe", "meta_description": "Convert PDF to XLS or XLSX without creating an account or exposing your data."},
+    "jpg_to_pdf": {"title": "JPG to PDF | FileSafe", "meta_description": "Convert JPG and PNG images to PDF with a clean, secure, privacy-first tool."},
+    "pdf_to_jpg": {"title": "PDF to JPG | FileSafe", "meta_description": "Turn PDF pages into JPG or PNG images quickly and securely."},
+    "about": {"title": "About FileSafe | Privacy-first document conversion", "meta_description": "Learn about the FileSafe mission: secure document conversion, privacy-first workflows, and no personal data collection."},
+    "privacy": {"title": "Privacy Policy | FileSafe", "meta_description": "Read the FileSafe privacy policy. No login, no tracking, no personal data collection, and temporary file cleanup."},
+    "terms": {"title": "Terms of Service | FileSafe", "meta_description": "Terms and conditions for using FileSafe's document conversion service."},
+    "contact": {"title": "Contact FileSafe", "meta_description": "Contact FileSafe about our secure document conversion service, feedback, or partnerships."},
+    "faq": {"title": "FAQ | FileSafe", "meta_description": "Answers to common questions about FileSafe conversions, upload limits, privacy, and document processing."},
+    "guide_word_to_pdf": {"title": "Word to PDF Guide | FileSafe", "meta_description": "How to convert Word files to PDF quickly and securely while keeping your data private."},
+    "guide_powerpoint_to_pdf": {"title": "PowerPoint to PDF Guide | FileSafe", "meta_description": "Learn how to convert PowerPoint to PDF with privacy-first steps and built-in accessibility."},
+    "guide_excel_to_pdf": {"title": "Excel to PDF Guide | FileSafe", "meta_description": "Create PDF versions of Excel files for sharing, printing, and archiving securely."},
+    "guide_pdf_to_word": {"title": "PDF to Word Guide | FileSafe", "meta_description": "Use FileSafe to turn PDFs into Word documents without creating an account."},
+    "guide_pdf_to_excel": {"title": "PDF to Excel Guide | FileSafe", "meta_description": "Convert PDF tables to Excel spreadsheets with a secure and streamlined process."},
+    "why_convert_to_pdf": {"title": "Why Convert to PDF? | FileSafe", "meta_description": "Learn why PDF remains the most trusted format for business documents, records, and sharing."},
+}
+
+CONVERSION_SPECS = {
+    "docx-to-pdf": {"source": "docx", "target": "pdf", "heading": "Convert DOCX to PDF", "intro": "Upload a Word document and convert it to a clean, shareable PDF in seconds."},
+    "pptx-to-pdf": {"source": "pptx", "target": "pdf", "heading": "Convert PPTX to PDF", "intro": "Turn presentations into PDFs while keeping files private and temporary."},
+    "xlsx-to-pdf": {"source": "xlsx", "target": "pdf", "heading": "Convert XLSX to PDF", "intro": "Convert spreadsheets to PDF for printing, archiving, and sharing."},
+    "pdf-to-doc": {"source": "pdf", "target": "doc", "heading": "Convert PDF to Word", "intro": "Convert PDF documents into editable DOC files securely."},
+    "pdf-to-docx": {"source": "pdf", "target": "docx", "heading": "Convert PDF to DOCX", "intro": "Turn a PDF into a modern Word document without login or tracking."},
+    "pdf-to-ppt": {"source": "pdf", "target": "ppt", "heading": "Convert PDF to PowerPoint", "intro": "Export PDFs into editable presentation files safely and confidentially."},
+    "pdf-to-pptx": {"source": "pdf", "target": "pptx", "heading": "Convert PDF to PPTX", "intro": "Create an editable PowerPoint from a PDF in a privacy-first workflow."},
+    "pdf-to-xls": {"source": "pdf", "target": "xls", "heading": "Convert PDF to Excel", "intro": "Transform tables and spreadsheets from PDF into Excel files."},
+    "pdf-to-xlsx": {"source": "pdf", "target": "xlsx", "heading": "Convert PDF to XLSX", "intro": "Convert PDF tables and content into an Excel sheet securely."},
+    "jpg-to-pdf": {"source": "jpg", "target": "pdf", "heading": "Convert JPG to PDF", "intro": "Combine or compress JPG files into a clean PDF document."},
+    "png-to-pdf": {"source": "png", "target": "pdf", "heading": "Convert PNG to PDF", "intro": "Convert PNG images into a convenient PDF document."},
+    "pdf-to-jpg": {"source": "pdf", "target": "jpg", "heading": "Convert PDF to JPG", "intro": "Export PDF pages as JPG images with privacy-safe handling."},
+    "pdf-to-png": {"source": "pdf", "target": "png", "heading": "Convert PDF to PNG", "intro": "Turn each page into a crisp PNG image file securely."},
+    "html-to-pdf": {"source": "html", "target": "pdf", "heading": "Convert HTML to PDF", "intro": "Generate PDFs from HTML pages with a clean, polished output."},
+    "pdf-to-html": {"source": "pdf", "target": "html", "heading": "Convert PDF to HTML", "intro": "Convert PDF documents into HTML pages for easy web sharing."},
+}
+
+
+def register_routes(app: Flask):
+    @app.route("/")
+    def index():
+        return render_template("index.html", page=PAGES["home"], page_key="home")
+
+    @app.route("/robots.txt")
+    def robots():
+        return Response(
+            "User-agent: *\nAllow: /\nSitemap: https://filesafe.eu/sitemap.xml\n",
+            mimetype="text/plain",
+        )
+
+    @app.route("/sitemap.xml")
+    def sitemap():
+        urls = [
+            "https://filesafe.eu/",
+            "https://filesafe.eu/docx-to-pdf",
+            "https://filesafe.eu/pptx-to-pdf",
+            "https://filesafe.eu/xlsx-to-pdf",
+            "https://filesafe.eu/pdf-to-word",
+            "https://filesafe.eu/pdf-to-powerpoint",
+            "https://filesafe.eu/pdf-to-excel",
+            "https://filesafe.eu/jpg-to-pdf",
+            "https://filesafe.eu/pdf-to-jpg",
+            "https://filesafe.eu/about",
+            "https://filesafe.eu/privacy-policy",
+            "https://filesafe.eu/terms-of-service",
+            "https://filesafe.eu/contact",
+            "https://filesafe.eu/faq",
+            "https://filesafe.eu/word-to-pdf-guide",
+            "https://filesafe.eu/powerpoint-to-pdf-guide",
+            "https://filesafe.eu/excel-to-pdf-guide",
+            "https://filesafe.eu/pdf-to-word-guide",
+            "https://filesafe.eu/pdf-to-excel-guide",
+            "https://filesafe.eu/why-convert-to-pdf",
+        ]
+        xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        for url in urls:
+            xml += f"  <url><loc>{url}</loc></url>\n"
+        xml += "</urlset>\n"
+        return Response(xml, mimetype="application/xml")
+
+    @app.route("/api/health")
+    def health():
+        return jsonify({"status": "ok", "service": "FileSafe"})
+
+    @app.route("/convert", methods=["POST"])
+    def convert_upload():
+        if "file" not in request.files:
+            return jsonify({"error": "No file uploaded"}), 400
+
+        uploaded = request.files["file"]
+        if uploaded.filename == "":
+            return jsonify({"error": "No file selected"}), 400
+
+        source = normalize_ext(request.form.get("source", ""))
+        target = normalize_ext(request.form.get("target", ""))
+        if not source or not target:
+            return jsonify({"error": "Missing conversion source/target"}), 400
+        if not is_valid_conversion(source, target):
+            return jsonify({"error": "Unsupported conversion pair"}), 400
+
+        filename = safe_name(uploaded.filename)
+        ext = os.path.splitext(filename)[1].lstrip(".")
+        if not is_allowed_extension(ext):
+            return jsonify({"error": "Unsupported file type"}), 400
+
+        temp_dir = tempfile.mkdtemp(prefix="filesafe-", dir="tmp")
+        temp_input = make_temp_file_path(temp_dir, filename)
+        uploaded.save(temp_input)
+
+        if os.path.getsize(temp_input) > FILESIZE_LIMIT:
+            try:
+                os.remove(temp_input)
+            except OSError:
+                pass
+            try:
+                os.rmdir(temp_dir)
+            except OSError:
+                pass
+            return jsonify({"error": "File exceeds 100 MB file size limit"}), 400
+
+        try:
+            output_path = convert_file(temp_input, source, target, temp_dir)
+            if not os.path.exists(output_path):
+                return jsonify({"error": "Conversion failed"}), 500
+
+            response = send_file(
+                output_path,
+                as_attachment=True,
+                download_name=os.path.basename(output_path),
+                mimetype="application/octet-stream",
+            )
+
+            def cleanup():
+                for path in [output_path, temp_input, temp_dir]:
+                    if os.path.isdir(path):
+                        for root, dirs, files in os.walk(path, topdown=False):
+                            for item in files:
+                                try:
+                                    os.remove(os.path.join(root, item))
+                                except OSError:
+                                    pass
+                            for item in dirs:
+                                try:
+                                    os.rmdir(os.path.join(root, item))
+                                except OSError:
+                                    pass
+                        try:
+                            os.rmdir(path)
+                        except OSError:
+                            pass
+                    elif os.path.exists(path):
+                        try:
+                            os.remove(path)
+                        except OSError:
+                            pass
+
+            response.call_on_close(cleanup)
+            return response
+        except Exception as exc:
+            return jsonify({"error": f"Conversion failed: {str(exc)}"}), 500
+
+    def make_conversion_page(route_name: str, source: str, target: str, heading: str, intro: str):
+        @app.route(f"/{route_name}")
+        def page():
+            return render_template(
+                "convert.html",
+                page=PAGES.get(route_name.replace("-", "_"), PAGES["home"]),
+                page_key=route_name,
+                title=heading,
+                heading=heading,
+                intro=intro,
+                source=source,
+                target=target,
+            )
+
+    for route_name, spec in CONVERSION_SPECS.items():
+        make_conversion_page(route_name, spec["source"], spec["target"], spec["heading"], spec["intro"])
+
+    @app.route("/pdf-to-word")
+    def pdf_to_word_page():
+        return render_template(
+            "convert.html",
+            page=PAGES["pdf_to_word"],
+            page_key="pdf-to-word",
+            title="PDF to Word",
+            heading="Convert PDF to Word",
+            intro="Convert PDF documents into editable DOC or DOCX files.",
+            source="pdf",
+            target="docx",
+        )
+
+    @app.route("/pdf-to-powerpoint")
+    def pdf_to_powerpoint_page():
+        return render_template(
+            "convert.html",
+            page=PAGES["pdf_to_powerpoint"],
+            page_key="pdf-to-powerpoint",
+            title="PDF to PowerPoint",
+            heading="Convert PDF to PowerPoint",
+            intro="Convert PDF files into editable presentation files.",
+            source="pdf",
+            target="pptx",
+        )
+
+    @app.route("/pdf-to-excel")
+    def pdf_to_excel_page():
+        return render_template(
+            "convert.html",
+            page=PAGES["pdf_to_excel"],
+            page_key="pdf-to-excel",
+            title="PDF to Excel",
+            heading="Convert PDF to Excel",
+            intro="Convert PDF tables and data into Excel-ready documents.",
+            source="pdf",
+            target="xlsx",
+        )
+
+    @app.route("/jpg-to-pdf")
+    def jpg_to_pdf_page():
+        return render_template(
+            "convert.html",
+            page=PAGES["jpg_to_pdf"],
+            page_key="jpg-to-pdf",
+            title="JPG to PDF",
+            heading="Convert JPG to PDF",
+            intro="Convert your images into PDF files in a privacy-safe workflow.",
+            source="jpg",
+            target="pdf",
+        )
+
+    @app.route("/pdf-to-jpg")
+    def pdf_to_jpg_page():
+        return render_template(
+            "convert.html",
+            page=PAGES["pdf_to_jpg"],
+            page_key="pdf-to-jpg",
+            title="PDF to JPG",
+            heading="Convert PDF to JPG",
+            intro="Turn PDF pages into JPG or PNG images.",
+            source="pdf",
+            target="jpg",
+        )
+
+    @app.route("/about")
+    def about():
+        return render_template("static_page.html", page=PAGES["about"], page_key="about", title="About FileSafe")
+
+    @app.route("/privacy-policy")
+    def privacy_policy():
+        return render_template("static_page.html", page=PAGES["privacy"], page_key="privacy", title="Privacy Policy")
+
+    @app.route("/terms-of-service")
+    def terms_of_service():
+        return render_template("static_page.html", page=PAGES["terms"], page_key="terms", title="Terms of Service")
+
+    @app.route("/contact")
+    def contact():
+        return render_template("static_page.html", page=PAGES["contact"], page_key="contact", title="Contact")
+
+    @app.route("/faq")
+    def faq():
+        return render_template("static_page.html", page=PAGES["faq"], page_key="faq", title="FAQ")
+
+    @app.route("/word-to-pdf-guide")
+    def word_to_pdf_guide():
+        return render_template("blog_post.html", page=PAGES["guide_word_to_pdf"], article_key="word_to_pdf", title="Word to PDF Guide")
+
+    @app.route("/powerpoint-to-pdf-guide")
+    def powerpoint_to_pdf_guide():
+        return render_template("blog_post.html", page=PAGES["guide_powerpoint_to_pdf"], article_key="powerpoint_to_pdf", title="PowerPoint to PDF Guide")
+
+    @app.route("/excel-to-pdf-guide")
+    def excel_to_pdf_guide():
+        return render_template("blog_post.html", page=PAGES["guide_excel_to_pdf"], article_key="excel_to_pdf", title="Excel to PDF Guide")
+
+    @app.route("/pdf-to-word-guide")
+    def pdf_to_word_guide():
+        return render_template("blog_post.html", page=PAGES["guide_pdf_to_word"], article_key="pdf_to_word", title="PDF to Word Guide")
+
+    @app.route("/pdf-to-excel-guide")
+    def pdf_to_excel_guide():
+        return render_template("blog_post.html", page=PAGES["guide_pdf_to_excel"], article_key="pdf_to_excel", title="PDF to Excel Guide")
+
+    @app.route("/why-convert-to-pdf")
+    def why_convert_to_pdf():
+        return render_template("blog_post.html", page=PAGES["why_convert_to_pdf"], article_key="why_convert_to_pdf", title="Why Convert to PDF")
+
+    @app.errorhandler(404)
+    def page_not_found(e):
+        return render_template("404.html"), 404

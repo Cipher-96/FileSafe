@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-shell">
+  <div class="container">
+    <div class="page-card">
+      <h1>Page not found</h1>
+      <p class="lead">The page you requested cannot be found.</p>
+      <p>The link may be outdated, or the content may have moved. You can return to the homepage or use one of the conversion tools below.</p>
+      <div class="form-actions" style="margin-top: 18px;">
+        <a class="btn btn-primary" href="/">Back to home</a>
+        <a class="btn btn-secondary" style="color: var(--ink); background: #fff; border: 1px solid var(--line);" href="/docx-to-pdf">DOCX to PDF</a>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

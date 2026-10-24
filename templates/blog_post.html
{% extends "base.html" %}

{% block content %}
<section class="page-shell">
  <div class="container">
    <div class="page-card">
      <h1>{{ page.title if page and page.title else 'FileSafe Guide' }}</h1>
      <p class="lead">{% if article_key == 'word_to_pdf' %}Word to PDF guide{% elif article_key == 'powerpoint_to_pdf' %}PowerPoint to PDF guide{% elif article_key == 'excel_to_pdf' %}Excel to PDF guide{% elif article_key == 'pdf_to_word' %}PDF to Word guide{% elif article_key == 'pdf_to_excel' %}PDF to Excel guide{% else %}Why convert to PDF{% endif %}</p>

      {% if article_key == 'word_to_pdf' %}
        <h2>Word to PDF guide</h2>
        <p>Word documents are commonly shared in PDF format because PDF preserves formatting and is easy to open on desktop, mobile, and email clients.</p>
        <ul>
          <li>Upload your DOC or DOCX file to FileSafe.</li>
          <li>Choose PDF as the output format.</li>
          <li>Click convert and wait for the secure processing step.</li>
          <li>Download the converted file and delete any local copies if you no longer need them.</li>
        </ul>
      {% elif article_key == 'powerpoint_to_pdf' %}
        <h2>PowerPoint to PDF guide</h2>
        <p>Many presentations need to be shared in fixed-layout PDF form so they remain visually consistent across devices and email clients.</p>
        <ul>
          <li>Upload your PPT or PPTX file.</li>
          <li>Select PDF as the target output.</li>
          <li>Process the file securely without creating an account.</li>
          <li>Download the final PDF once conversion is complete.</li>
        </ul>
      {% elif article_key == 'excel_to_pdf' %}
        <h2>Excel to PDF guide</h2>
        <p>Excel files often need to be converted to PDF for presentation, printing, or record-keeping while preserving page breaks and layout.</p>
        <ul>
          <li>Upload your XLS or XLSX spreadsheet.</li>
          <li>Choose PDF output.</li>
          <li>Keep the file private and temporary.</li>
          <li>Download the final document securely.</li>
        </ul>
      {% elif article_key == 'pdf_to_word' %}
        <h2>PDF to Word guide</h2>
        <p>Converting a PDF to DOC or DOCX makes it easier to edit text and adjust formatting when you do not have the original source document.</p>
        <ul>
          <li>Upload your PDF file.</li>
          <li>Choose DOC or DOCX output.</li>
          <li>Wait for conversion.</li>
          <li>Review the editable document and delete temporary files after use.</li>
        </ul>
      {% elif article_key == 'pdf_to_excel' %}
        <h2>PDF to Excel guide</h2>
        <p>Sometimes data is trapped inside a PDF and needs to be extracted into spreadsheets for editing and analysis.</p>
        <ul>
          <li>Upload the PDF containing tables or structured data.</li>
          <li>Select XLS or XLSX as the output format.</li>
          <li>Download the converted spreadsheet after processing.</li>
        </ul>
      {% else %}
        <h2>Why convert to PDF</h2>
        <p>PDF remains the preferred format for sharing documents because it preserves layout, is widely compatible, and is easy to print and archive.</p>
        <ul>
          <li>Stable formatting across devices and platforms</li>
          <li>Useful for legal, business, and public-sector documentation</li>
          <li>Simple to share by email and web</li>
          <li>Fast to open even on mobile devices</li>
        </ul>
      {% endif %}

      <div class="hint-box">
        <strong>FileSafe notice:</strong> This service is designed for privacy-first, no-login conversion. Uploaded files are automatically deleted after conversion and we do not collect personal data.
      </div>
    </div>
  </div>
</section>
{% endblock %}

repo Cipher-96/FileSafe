@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-shell">
+  <div class="container">
+    <div class="page-card">
+      {% if page_key == 'about' %}
+        <h1>About FileSafe</h1>
+        <p class="lead">FileSafe is a privacy-first document conversion utility built for public use across Europe.</p>
+        <p>We believe document conversion should be simple, secure, and transparent. This service is designed for public use without logins, accounts, ads-based profiling, or long-term storage. Files are processed briefly, then deleted automatically after use.</p>
+        <p>Our mission is to provide a premium, clean, and legally-aware document conversion experience that is practical for private users, students, SMEs, and public-sector workflows.</p>
+
+        <div class="hint-box">
+          <strong>Privacy commitments:</strong>
+          <ul>
+            <li>No personal data collection</li>
+            <li>No user tracking</li>
+            <li>No account creation</li>
+            <li>No cookies for advertising or profiling</li>
+            <li>Temporary file cleanup after conversion</li>
+          </ul>
+        </div>
+
+      {% elif page_key == 'privacy' %}
+        <h1>Privacy Policy</h1>
+        <p class="lead">FileSafe is designed to collect as little personal data as possible.</p>
+        <p><strong>1. Data minimisation</strong><br />We do not require accounts, login, or profile creation. We do not collect personal information such as names, phone numbers, home addresses, tax IDs, or payment records.</p>
+        <p><strong>2. No tracking</strong><br />We do not use third-party tracking, behavioural analytics, cross-site cookies, or advertising IDs to identify individual users.</p>
+        <p><strong>3. Temporary file handling</strong><br />Uploaded files are kept only for the duration of processing. Once conversion is complete, temporary files are deleted automatically. We do not store uploaded content for long-term use.</p>
+        <p><strong>4. Security</strong><br />Files are processed in a secure temporary folder using controlled validation and sanitised filenames. Supported file types are restricted to a defined conversion set.</p>
+        <p><strong>5. Cookies</strong><br />We do not use tracking cookies. We may use a minimal session cookie only if necessary for technical reasons, but no advertising or user profiling cookies are used.</p>
+        <p><strong>6. Contact</strong><br />If you have questions about privacy, contact us through the contact form or support channel listed on this website.</p>
+
+      {% elif page_key == 'terms' %}
+        <h1>Terms of Service</h1>
+        <p class="lead">These terms govern use of the FileSafe document conversion service.</p>
+        <p><strong>Use of service</strong><br />FileSafe is a public document conversion utility intended for lawful use. You agree not to upload illegal, abusive, harmful, or infringing files.</p>
+        <p><strong>Supported file types</strong><br />The service supports a defined set of document, image, and PDF conversions. Unsupported file types, hidden payloads, or unsafe files may be rejected.</p>
+        <p><strong>File handling</strong><br />Uploaded files are stored only in secure temporary storage and are deleted after conversion. We do not keep uploaded content for long-term storage or future use.</p>
+        <p><strong>Availability</strong><br />FileSafe aims to keep the service reliable, but we do not guarantee uninterrupted availability or error-free conversion for every file.</p>
+        <p><strong>Intellectual property</strong><br />You retain ownership of your documents. By using the service you confirm you have the right to convert and download the files you upload.</p>
+        <p><strong>Changes</strong><br />The service may change over time as features evolve, but the privacy-first intent remains the same.</p>
+
+      {% elif page_key == 'contact' %}
+        <h1>Contact</h1>
+        <p class="lead">Contact FileSafe for questions, support, or partnership opportunities.</p>
+        <p>Email: hello@filesafe.eu</p>
+        <p>Location: Europe</p>
+        <p>We operate as a public utility website focused on privacy, trust, and secure file conversion. We do not collect personal data through account creation or invasive tracking.</p>
+
+      {% elif page_key == 'faq' %}
+        <h1>FAQ</h1>
+        <div class="faq-list">
+          <div class="faq-item">
+            <h3>Do I need an account to use FileSafe?</h3>
+            <p>No. FileSafe is designed for public use without login or account creation.</p>
+          </div>
+          <div class="faq-item">
+            <h3>Does FileSafe store my files?</h3>
+            <p>No. Uploaded files are kept only temporarily and deleted immediately after conversion.</p>
+          </div>
+          <div class="faq-item">
+            <h3>What file types are supported?</h3>
+            <p>FileSafe supports a defined list of document, image, and PDF conversions. Unsupported content is rejected.</p>
+          </div>
+          <div class="faq-item">
+            <h3>What is the maximum file size?</h3>
+            <p>The maximum upload size is 100 MB.</p>
+          </div>
+          <div class="faq-item">
+            <h3>Does FileSafe use tracking cookies?</h3>
+            <p>No. We intentionally avoid tracking cookies and do not profile users.</p>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}
